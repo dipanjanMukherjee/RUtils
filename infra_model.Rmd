@@ -1,0 +1,104 @@
+---
+title: "infra_model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+the **hosts** considered for this analysis are,
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+require(readr)
+require(dplyr)
+require(ggplot2)
+require(ggrepel)
+cputime_tbl1 <- read.table("cpu1.csv", header = TRUE, sep = ",", row.names = FALSE)
+
+cputime_tbl2 <- read.table("cpu2.csv", header = TRUE, sep = ",", row.names = FALSE)
+
+cputime_tbl <- rbind(cputime_tbl1, cputime_tbl2)
+write.csv(cputime_tbl, file = "cpu.csv")
+```
+
+`No of CPU observations:``r nrow(cputime_tbl)`
+
+to identify the cpu utilization acrross hosts, following histogram is plotted
+
+```{r, echo=FALSE,message=FALSE, warning=FALSE, results='hide'}
+avg_cpuusage_tbl <- read.csv("cpu.csv")
+hist_cpu <- ggplot(data = avg_cpuusage_tbl, aes(x = mean_val))+ labs(x="cpu usage",y="number of hosts")+ geom_histogram()+
+  geom_vline(aes(xintercept = max(avg_cpuusage_tbl$mean_val),color = "Max"), linetype = "dashed", size = 1)+
+  geom_vline(aes(xintercept = min(avg_cpuusage_tbl$mean_val),color = "Min"), linetype = "dashed", size = 1)+
+  scale_color_manual("Legends", values = c("Mean" = "blue", "Min" = "green", "Max" = "red")) +
+  coord_cartesian(xlim = c(0,15))+
+  coord_cartesian(ylim = c(0,2))+
+  scale_y_continuous(breaks = c(0,1,2))+
+  coord_cartesian(ylim = c(0,20))+
+  scale_y_continuous(breaks = c(0,50,100))
+
+plot(hist_cpu)
+```
+
+The results show that mean cpu utilization is generally higher across hosts
+
+```{r, echo=FALSE, message=FALSE,warning=FALSE}
+'Identify the right number of clusters'
+
+# initialize ratio_ss
+ratio_ss <- rep(0,7)
+
+# finsih the for loop
+for(k in 1:7){
+  # apply k means
+  fit.km <- kmeans(metrics_ds[,2:5], k, nstart = 25)
+  
+  #save the ratio b/w wss to tss in kth element of ratio_ss
+  ratio_ss[k] <- fit.km$tot.withinss / fit.km$totss
+}
+
+plot(ratio_ss, main = "Scree plot - identify the right number of clusters", type = "b", xlab = "k")
+```
+
+**cluster visualization for hierarchical - 2D**
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=10, fig.width=12}
+cpuhcluster <- ggplot(metrics_ds_hcluster, aes(x = cpu, y = gpu, color = cluster)) +
+  geom_point(size = 2) +
+  labs(x = "% CPU utilization", y = "% GPU Utilization") +
+  ggtitle("Hierarchical - CPU vs GPU") +
+  scale_y_continuous(limits = c(0,20), breaks = c(0,2,4,6,8,10,12,14,16,18,20)) +
+  scale_x_continuous(limits = c(0,10), breaks = c(0,1,2,3,4,5,6,7,8,9,10)) +
+  geom_hline(aes(yintercept = mean(gpu)), colour = "red", linetype = "dashed", size = 1) +
+  geom_vline(aes(xintercept = mean(cpu)), colour = "blue", linetype = "dashed", size = 1)
+```
+
+**Dunns index values**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+require(clValid)
+dunn_hcluster <- clValid::dunn(clusters = memb_complete, Data = metrics_ds[,2:5])
+dunn_kcluster <- clValid::dunn(clusters = fit.km$cluster, Data = metrics_ds[,2:5])
+```
+
+`Dunns index for k-means clustering:` `r dunn_kcluster`
+`Dunns index for hierarchical clustering:` `r dunn_hcluster`
